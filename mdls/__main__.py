@@ -9,14 +9,14 @@ try:
 except Exception:  # pylint: disable=broad-except
     import json
 
-from .python_ls import (PythonLanguageServer, start_io_lang_server,
+from .markdown_ls import (MarkdownLanguageServer, start_io_lang_server,
                         start_tcp_lang_server)
 
 LOG_FORMAT = "%(asctime)s UTC - %(levelname)s - %(name)s - %(message)s"
 
 
 def add_arguments(parser):
-    parser.description = "Python Language Server"
+    parser.description = "Markdown Language Server"
 
     parser.add_argument(
         "--tcp", action="store_true",
@@ -40,7 +40,7 @@ def add_arguments(parser):
     log_group = parser.add_mutually_exclusive_group()
     log_group.add_argument(
         "--log-config",
-        help="Path to a JSON file containing Python logging config."
+        help="Path to a JSON file containing python logging config."
     )
     log_group.add_argument(
         "--log-file",
@@ -62,11 +62,11 @@ def main():
 
     if args.tcp:
         start_tcp_lang_server(args.host, args.port, args.check_parent_process,
-                              PythonLanguageServer)
+                              MarkdownLanguageServer)
     else:
         stdin, stdout = _binary_stdio()
         start_io_lang_server(stdin, stdout, args.check_parent_process,
-                             PythonLanguageServer)
+                             MarkdownLanguageServer)
 
 
 def _binary_stdio():

@@ -1,6 +1,2 @@
-include README.rst
 include versioneer.py
-include pyls/_version.py
-include LICENSE
-include .pylintrc
-recursive-include test *.py
+include mdls/_version.py

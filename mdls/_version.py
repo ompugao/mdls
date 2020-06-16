@@ -1,4 +1,4 @@
-# pylint: skip-file
+
 # This file helps to compute a version number in source trees obtained from
 # git-archive tarball (such as those provided by githubs download-from-tag
 # feature). Distribution tarballs (built by setup.py sdist) and build
@@ -43,7 +43,7 @@ def get_config():
     cfg.style = "pep440"
     cfg.tag_prefix = ""
     cfg.parentdir_prefix = ""
-    cfg.versionfile_source = "pyls/_version.py"
+    cfg.versionfile_source = "mdls/_version.py"
     cfg.verbose = False
     return cfg
 

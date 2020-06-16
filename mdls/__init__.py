@@ -1,4 +1,3 @@
-# Copyright 2017 Palantir Technologies, Inc.
 import os
 import sys
 import pluggy
@@ -11,9 +10,9 @@ if sys.version_info[0] < 3:
 __version__ = get_versions()['version']
 del get_versions
 
-PYLS = 'pyls'
+MDLS = 'mdls'
 
-hookspec = pluggy.HookspecMarker(PYLS)
-hookimpl = pluggy.HookimplMarker(PYLS)
+hookspec = pluggy.HookspecMarker(MDLS)
+hookimpl = pluggy.HookimplMarker(MDLS)
 
 IS_WIN = os.name == 'nt'
