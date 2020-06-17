@@ -144,7 +144,7 @@ class MarkdownLanguageServer(MethodDispatcher):
         self._jsonrpc_stream_writer.close()
 
     def _match_uri_to_workspace(self, uri):
-        workspace_uri = _utils.match_uri_to_workspace(uri, self.Markdown)
+        workspace_uri = _utils.match_uri_to_workspace(uri, self.workspaces)
         return self.workspaces.get(workspace_uri, self.workspace)
 
     def _hook(self, hook_name, doc_uri=None, **kwargs):
@@ -175,7 +175,7 @@ class MarkdownLanguageServer(MethodDispatcher):
             'hoverProvider': True,
             'referencesProvider': True,
             'renameProvider': True,
-            #'foldingRangeProvider': True,
+            'foldingRangeProvider': False,
             #'signatureHelpProvider': {
             #    'triggerCharacters': ['(', ',', '=']
             #},
@@ -263,15 +263,15 @@ class MarkdownLanguageServer(MethodDispatcher):
     def hover(self, doc_uri, position):
         return self._hook('mdls_hover', doc_uri, position=position) or {'contents': ''}
 
-    @_utils.debounce(LINT_DEBOUNCE_S, keyed_by='doc_uri')
-    def lint(self, doc_uri, is_saved):
-        # Since we're debounced, the document may no longer be open
-        workspace = self._match_uri_to_workspace(doc_uri)
-        if doc_uri in workspace.documents:
-            workspace.publish_diagnostics(
-                doc_uri,
-                flatten(self._hook('mdls_lint', doc_uri, is_saved=is_saved))
-            )
+    # @_utils.debounce(LINT_DEBOUNCE_S, keyed_by='doc_uri')
+    # def lint(self, doc_uri, is_saved):
+    #     # Since we're debounced, the document may no longer be open
+    #     workspace = self._match_uri_to_workspace(doc_uri)
+    #     if doc_uri in workspace.documents:
+    #         workspace.publish_diagnostics(
+    #             doc_uri,
+    #             flatten(self._hook('mdls_lint', doc_uri, is_saved=is_saved))
+    #         )
 
     def references(self, doc_uri, position, exclude_declaration):
         return flatten(self._hook(
@@ -296,7 +296,7 @@ class MarkdownLanguageServer(MethodDispatcher):
         workspace = self._match_uri_to_workspace(textDocument['uri'])
         workspace.put_document(textDocument['uri'], textDocument['text'], version=textDocument.get('version'))
         self._hook('mdls_document_did_open', textDocument['uri'])
-        self.lint(textDocument['uri'], is_saved=True)
+        #self.lint(textDocument['uri'], is_saved=True)
 
     def m_text_document__did_change(self, contentChanges=None, textDocument=None, **_kwargs):
         workspace = self._match_uri_to_workspace(textDocument['uri'])
@@ -306,10 +306,11 @@ class MarkdownLanguageServer(MethodDispatcher):
                 change,
                 version=textDocument.get('version')
             )
-        self.lint(textDocument['uri'], is_saved=False)
+        #self.lint(textDocument['uri'], is_saved=False)
 
     def m_text_document__did_save(self, textDocument=None, **_kwargs):
-        self.lint(textDocument['uri'], is_saved=True)
+        pass
+        #self.lint(textDocument['uri'], is_saved=True)
 
     def m_text_document__code_action(self, textDocument=None, range=None, context=None, **_kwargs):
         return self.code_actions(textDocument['uri'], range, context)
@@ -358,8 +359,8 @@ class MarkdownLanguageServer(MethodDispatcher):
         for workspace_uri in self.workspaces:
             workspace = self.workspaces[workspace_uri]
             workspace.update_config(self.config)
-            for doc_uri in workspace.documents:
-                self.lint(doc_uri, is_saved=False)
+            # for doc_uri in workspace.documents:
+            #     self.lint(doc_uri, is_saved=False)
 
     def m_workspace__did_change_workspace_folders(self, event=None, **_kwargs):  # pylint: disable=too-many-locals
         if event is None:
@@ -413,15 +414,15 @@ class MarkdownLanguageServer(MethodDispatcher):
         if config_changed:
             self.config.settings.cache_clear()
         elif not changed_md_files:
-            # Only externally changed python files and lint configs may result in changed diagnostics.
+            # Only externally changed markdown files and lint configs may result in changed diagnostics.
             return
 
-        for workspace_uri in self.workspaces:
-            workspace = self.workspaces[workspace_uri]
-            for doc_uri in workspace.documents:
-                # Changes in doc_uri are already handled by m_text_document__did_save
-                if doc_uri not in changed_md_files:
-                    self.lint(doc_uri, is_saved=False)
+        # for workspace_uri in self.workspaces:
+        #     workspace = self.workspaces[workspace_uri]
+        #     for doc_uri in workspace.documents:
+        #         # Changes in doc_uri are already handled by m_text_document__did_save
+        #         if doc_uri not in changed_md_files:
+        #             self.lint(doc_uri, is_saved=False)
 
     def m_workspace__execute_command(self, command=None, arguments=None):
         return self.execute_command(command, arguments)

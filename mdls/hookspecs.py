@@ -1,20 +1,19 @@
-# Copyright 2017 Palantir Technologies, Inc.
 # pylint: disable=redefined-builtin, unused-argument
-from pyls import hookspec
+from mdls import hookspec
 
 
 @hookspec
-def pyls_code_actions(config, workspace, document, range, context):
+def mdls_code_actions(config, workspace, document, range, context):
     pass
 
 
 @hookspec
-def pyls_code_lens(config, workspace, document):
+def mdls_code_lens(config, workspace, document):
     pass
 
 
 @hookspec
-def pyls_commands(config, workspace):
+def mdls_commands(config, workspace):
     """The list of command strings supported by the server.
 
     Returns:
@@ -23,100 +22,100 @@ def pyls_commands(config, workspace):
 
 
 @hookspec
-def pyls_completions(config, workspace, document, position):
+def mdls_completions(config, workspace, document, position):
     pass
 
 
 @hookspec
-def pyls_definitions(config, workspace, document, position):
+def mdls_definitions(config, workspace, document, position):
     pass
 
 
 @hookspec
-def pyls_dispatchers(config, workspace):
+def mdls_dispatchers(config, workspace):
     pass
 
 
 @hookspec
-def pyls_document_did_open(config, workspace, document):
+def mdls_document_did_open(config, workspace, document):
     pass
 
 
 @hookspec
-def pyls_document_did_save(config, workspace, document):
+def mdls_document_did_save(config, workspace, document):
     pass
 
 
 @hookspec
-def pyls_document_highlight(config, workspace, document, position):
+def mdls_document_highlight(config, workspace, document, position):
     pass
 
 
 @hookspec
-def pyls_document_symbols(config, workspace, document):
+def mdls_document_symbols(config, workspace, document):
     pass
 
 
 @hookspec(firstresult=True)
-def pyls_execute_command(config, workspace, command, arguments):
+def mdls_execute_command(config, workspace, command, arguments):
     pass
 
 
 @hookspec
-def pyls_experimental_capabilities(config, workspace):
+def mdls_experimental_capabilities(config, workspace):
     pass
 
 
 @hookspec(firstresult=True)
-def pyls_folding_range(config, workspace, document):
+def mdls_folding_range(config, workspace, document):
     pass
 
 
 @hookspec(firstresult=True)
-def pyls_format_document(config, workspace, document):
+def mdls_format_document(config, workspace, document):
     pass
 
 
 @hookspec(firstresult=True)
-def pyls_format_range(config, workspace, document, range):
+def mdls_format_range(config, workspace, document, range):
     pass
 
 
 @hookspec(firstresult=True)
-def pyls_hover(config, workspace, document, position):
+def mdls_hover(config, workspace, document, position):
     pass
 
 
 @hookspec
-def pyls_initialize(config, workspace):
+def mdls_initialize(config, workspace):
     pass
 
 
 @hookspec
-def pyls_initialized():
+def mdls_initialized():
     pass
 
 
-@hookspec
-def pyls_lint(config, workspace, document, is_saved):
-    pass
+# @hookspec
+# def mdls_lint(config, workspace, document, is_saved):
+#     pass
 
 
 @hookspec
-def pyls_references(config, workspace, document, position, exclude_declaration):
+def mdls_references(config, workspace, document, position, exclude_declaration):
     pass
 
 
 @hookspec(firstresult=True)
-def pyls_rename(config, workspace, document, position, new_name):
+def mdls_rename(config, workspace, document, position, new_name):
     pass
 
 
 @hookspec
-def pyls_settings(config):
+def mdls_settings(config):
     pass
 
 
 @hookspec(firstresult=True)
-def pyls_signature_help(config, workspace, document, position):
+def mdls_signature_help(config, workspace, document, position):
     pass

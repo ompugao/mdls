@@ -4,8 +4,6 @@ import logging
 import os
 import re
 
-import jedi
-
 from . import lsp, uris, _utils
 
 log = logging.getLogger(__name__)
@@ -28,26 +26,6 @@ class Workspace(object):
         self._root_uri_scheme = uris.urlparse(self._root_uri)[0]
         self._root_path = uris.to_fs_path(self._root_uri)
         self._docs = {}
-
-        # Cache jedi environments
-        self._environments = {}
-
-        # Whilst incubating, keep rope private
-        self.__rope = None
-        self.__rope_config = None
-
-    def _rope_project_builder(self, rope_config):
-        from rope.base.project import Project
-
-        # TODO: we could keep track of dirty files and validate only those
-        if self.__rope is None or self.__rope_config != rope_config:
-            rope_folder = rope_config.get('ropeFolder')
-            self.__rope = Project(self._root_path, ropefolder=rope_folder)
-            self.__rope.prefs.set('extension_modules', rope_config.get('extensionModules', []))
-            self.__rope.prefs.set('ignore_syntax_errors', True)
-            self.__rope.prefs.set('ignore_bad_imports', True)
-        self.__rope.validate()
-        return self.__rope
 
     @property
     def documents(self):
@@ -95,25 +73,18 @@ class Workspace(object):
     def show_message(self, message, msg_type=lsp.MessageType.Info):
         self._endpoint.notify(self.M_SHOW_MESSAGE, params={'type': msg_type, 'message': message})
 
-    def source_roots(self, document_path):
-        """Return the source roots for the given document."""
-        files = _utils.find_parents(self._root_path, document_path, ['setup.py', 'pyproject.toml']) or []
-        return list({os.path.dirname(project_file) for project_file in files}) or [self._root_path]
-
     def _create_document(self, doc_uri, source=None, version=None):
         path = uris.to_fs_path(doc_uri)
         return Document(
             doc_uri, self, source=source, version=version,
-            extra_sys_path=self.source_roots(path),
-            rope_project_builder=self._rope_project_builder,
+            local=self.is_local(),
             config=self._config,
         )
 
 
 class Document(object):
 
-    def __init__(self, uri, workspace, source=None, version=None, local=True, extra_sys_path=None,
-                 rope_project_builder=None, config=None):
+    def __init__(self, uri, workspace, source=None, version=None, local=True, config=None):
         self.uri = uri
         self.version = version
         self.path = uris.to_fs_path(uri)
@@ -123,15 +94,9 @@ class Document(object):
         self._workspace = workspace
         self._local = local
         self._source = source
-        self._extra_sys_path = extra_sys_path or []
-        self._rope_project_builder = rope_project_builder
 
     def __str__(self):
         return str(self.uri)
-
-    def _rope_resource(self, rope_config):
-        from rope.base import libutils
-        return libutils.path_to_resource(self._rope_project_builder(rope_config), self.path)
 
     @property
     def lines(self):
@@ -211,54 +176,3 @@ class Document(object):
         m_end = RE_END_WORD.findall(end)
 
         return m_start[0] + m_end[-1]
-
-    def jedi_names(self, all_scopes=False, definitions=True, references=False):
-        script = self.jedi_script()
-        return script.get_names(all_scopes=all_scopes, definitions=definitions,
-                                references=references)
-
-    def jedi_script(self, position=None):
-        extra_paths = []
-        environment_path = None
-
-        if self._config:
-            jedi_settings = self._config.plugin_settings('jedi', document_path=self.path)
-            environment_path = jedi_settings.get('environment')
-            extra_paths = jedi_settings.get('extra_paths') or []
-
-        environment = self.get_enviroment(environment_path) if environment_path else None
-        sys_path = self.sys_path(environment_path) + extra_paths
-        project_path = self._workspace.root_path
-
-        kwargs = {
-            'code': self.source,
-            'path': self.path,
-            'environment': environment,
-            'project': jedi.Project(path=project_path, sys_path=sys_path),
-        }
-
-        if position:
-            # Deprecated by Jedi to use in Script() constructor
-            kwargs += _utils.position_to_jedi_linecolumn(self, position)
-
-        return jedi.Script(**kwargs)
-
-    def get_enviroment(self, environment_path=None):
-        # TODO(gatesn): #339 - make better use of jedi environments, they seem pretty powerful
-        if environment_path is None:
-            environment = jedi.api.environment.get_cached_default_environment()
-        else:
-            if environment_path in self._workspace._environments:
-                environment = self._workspace._environments[environment_path]
-            else:
-                environment = jedi.api.environment.create_environment(path=environment_path, safe=False)
-                self._workspace._environments[environment_path] = environment
-
-        return environment
-
-    def sys_path(self, environment_path=None):
-        # Copy our extra sys path
-        path = list(self._extra_sys_path)
-        environment = self.get_enviroment(environment_path=environment_path)
-        path.extend(environment.get_sys_path())
-        return path
