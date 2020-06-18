@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import threading
+import fnmatch
 
 PY2 = sys.version_info.major == 2
 
@@ -101,6 +102,13 @@ def match_uri_to_workspace(uri, workspaces):
                 max_len = match_len
                 chosen_workspace = workspace
     return chosen_workspace
+
+def find_files(directory, pattern):
+    for root, dirs, files in os.walk(directory):
+        for basename in files:
+            if fnmatch.fnmatch(basename, pattern):
+                filename = os.path.join(root, basename)
+                yield filename
 
 
 def list_to_string(value):

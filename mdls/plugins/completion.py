@@ -1,22 +1,16 @@
 # Copyright 2017 Palantir Technologies, Inc.
 import logging
-from rope.contrib.codeassist import code_assist, sorted_proposals
 
-from pyls import hookimpl, lsp
-
+from mdls import hookimpl, lsp
 
 log = logging.getLogger(__name__)
 
 
 @hookimpl
-def pyls_settings():
-    # Default rope_completion to disabled
-    return {'plugins': {'rope_completion': {'enabled': False}}}
+def mdls_completions(config, workspace, document, position):
+    #TODO fuzzy search with pagelinks
+    return []
 
-
-@hookimpl
-def pyls_completions(config, workspace, document, position):
-    # Rope is a bit rubbish at completing module imports, so we'll return None
     word = document.word_at_position({
         # The -1 should really be trying to look at the previous word, but that might be quite expensive
         # So we only skip import completions when the cursor is one space after `import`
@@ -26,9 +20,6 @@ def pyls_completions(config, workspace, document, position):
         return None
 
     offset = document.offset_at_position(position)
-    rope_config = config.settings(document_path=document.path).get('rope', {})
-    rope_project = workspace._rope_project_builder(rope_config)
-    document_rope = document._rope_resource(rope_config)
 
     try:
         definitions = code_assist(rope_project, document.source, offset, document_rope, maxfixes=3)

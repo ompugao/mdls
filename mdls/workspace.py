@@ -4,14 +4,73 @@ import logging
 import os
 import re
 
+try:
+    from re import Scanner
+except ImportError:
+    from sre import Scanner
+
 from . import lsp, uris, _utils
+from watchdog.events import PatternMatchingEventHandler
+from watchdog.observers import Observer
 
 log = logging.getLogger(__name__)
+
+MARKDOWN_FILE_EXTENSIONS = ('.md', '.markdown')
 
 # TODO: this is not the best e.g. we capture numbers
 RE_START_WORD = re.compile('[A-Za-z_0-9]*$')
 RE_END_WORD = re.compile('^[A-Za-z_0-9]*')
+RE_PAGELINK = re.compile(r"\[\[\s*(.*?)\s*\]\]")
 
+class PageLink(object):
+    def __init__(self, name, line, start, end):
+        self.name = name
+        self.line = line
+        self.start = start
+        self.end = end
+    def __str__(self):
+        return f"PageLink: {self.name} at line: {self.line} ({self.start}-{self.end})"
+
+class MarkdownFileEventHandler(PatternMatchingEventHandler):
+    def __init__(self, workspace):
+        super(MarkdownFileEventHandler, self).__init__(patterns=set(['*'+e for e in MARKDOWN_FILE_EXTENSIONS]))
+        self.workspace = workspace
+
+        for ext in MARKDOWN_FILE_EXTENSIONS:
+            for filename in _utils.find_files(workspace._root_path, '*' + ext):
+                doc_uri = uris.from_fs_path(filename)
+                # file will be read inside Document class if needed
+                self.workspace._docs_scanned[doc_uri] = self.workspace._create_document(doc_uri, source=None, version=None)
+
+    def on_moved(self, event):
+        if event.is_directory:
+            return
+        doc_uri_src = uris.from_fs_path(event.src_path)
+        doc_uri_dest = uris.from_fs_path(event.dest_path)
+        self.workspace._docs_scanned.pop(doc_uri_src, None)
+        self.workspace._docs_scanned[doc_uri_dest] = self.workspace._create_document(doc_uri_dest, source=None, version=None)
+
+    def on_created(self, event):
+        if event.is_directory:
+            return
+        doc_uri = uris.from_fs_path(event.src_path)
+        if not doc_uri in self.workspace._docs_scanned:
+            # file will be read inside Document class if needed
+            self.workspace._docs_scanned[doc_uri] = self.workspace._create_document(doc_uri, source=None, version=None)
+
+
+    def on_deleted(self, event):
+        if event.is_directory:
+            return
+        doc_uri = uris.from_fs_path(event.src_path)
+        self.workspace._docs_scanned.pop(doc_uri, None)
+
+    def on_modified(self, event):
+        if not event.is_directory:
+            doc_uri = uris.from_fs_path(event.src_path)
+            if doc_uri in self.workspace._docs_scanned:
+                # file will be read inside Document class if needed
+                self.workspace._docs_scanned[doc_uri]._source = None
 
 class Workspace(object):
 
@@ -25,7 +84,19 @@ class Workspace(object):
         self._endpoint = endpoint
         self._root_uri_scheme = uris.urlparse(self._root_uri)[0]
         self._root_path = uris.to_fs_path(self._root_uri)
-        self._docs = {}
+        self._docs = {} # uri -> Document
+        self._docs_scanned = {} # uri -> Document
+        self._observer = None
+        self.update_config(self._config)
+
+    def __del__(self, ):
+        self.finalize()
+
+    def finalize(self, ):
+        if self._observer:
+            self._observer.stop()
+            #self._observer.join() #TODO should we wait?
+        self._observer = None
 
     @property
     def documents(self):
@@ -61,6 +132,17 @@ class Workspace(object):
 
     def update_config(self, config):
         self._config = config
+        cap_client_workspaceedit = self._config.capabilities.get('workspace', {}).get('workspaceEdit', None) #'didChangeWatchedFiles'?
+        #if not cap_client_workspaceedit and self.is_local():
+        if self.is_local():
+            if self._observer is not None:
+                self._observer.stop()
+                self._observer.join(1.0)
+            event_handler = MarkdownFileEventHandler(self)
+            self._observer = Observer()
+            self._observer.schedule(event_handler, self._root_path, recursive=True)
+            self._observer.start()
+
         for doc_uri in self.documents:
             self.get_document(doc_uri).update_config(config)
 
@@ -74,7 +156,6 @@ class Workspace(object):
         self._endpoint.notify(self.M_SHOW_MESSAGE, params={'type': msg_type, 'message': message})
 
     def _create_document(self, doc_uri, source=None, version=None):
-        path = uris.to_fs_path(doc_uri)
         return Document(
             doc_uri, self, source=source, version=version,
             local=self.is_local(),
@@ -89,14 +170,24 @@ class Document(object):
         self.version = version
         self.path = uris.to_fs_path(uri)
         self.filename = os.path.basename(self.path)
+        self.relpath = os.path.relpath(self.path, workspace._root_path)
+        self.relname = os.path.splitext(self.relpath)
 
         self._config = config
         self._workspace = workspace
         self._local = local
         self._source = source
 
+        self._pagelinks = None #cache
+
     def __str__(self):
         return str(self.uri)
+
+    @property
+    def pagelinks(self):
+        if self._pagelinks is not None:
+            return self._pagelinks
+        return self.scan_links()
 
     @property
     def lines(self):
@@ -111,6 +202,17 @@ class Document(object):
 
     def update_config(self, config):
         self._config = config
+
+    def scan_links(self, ):
+        self._pagelinks = []
+        for il, l in enumerate(self.source.splitlines()):
+            for itr in RE_PAGELINK.finditer(l):
+                self._pagelinks.append(PageLink(itr.group(1), il, itr.start(1), itr.end(1)))
+        return self._pagelinks
+
+    def replace_links(self, oldname, newname):
+        #TODO
+        return
 
     def apply_change(self, change):
         """Apply a change to the document."""
@@ -176,3 +278,18 @@ class Document(object):
         m_end = RE_END_WORD.findall(end)
 
         return m_start[0] + m_end[-1]
+
+    def pagelink_at_position(self, position):
+        if position['line'] >= len(self.lines):
+            return ''
+
+        line = self.lines[position['line']]
+        i = position['character']
+        start = line.rfind('[[', 0, i)
+        end = line.find(']]', i)
+
+        page = s[line.rfind('[[', 0, i)+2:line.find(']]', i)].strip().rstrip()
+        if '[[' in page or ']]' in page:
+            return ''
+        return page
+

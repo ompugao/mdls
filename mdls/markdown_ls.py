@@ -11,7 +11,7 @@ from pyls_jsonrpc.streams import JsonRpcStreamReader, JsonRpcStreamWriter
 
 from . import lsp, _utils, uris
 from .config import config
-from .workspace import Workspace
+from .workspace import Workspace, MARKDOWN_FILE_EXTENSIONS
 
 log = logging.getLogger(__name__)
 
@@ -19,7 +19,6 @@ log = logging.getLogger(__name__)
 LINT_DEBOUNCE_S = 0.5  # 500 ms
 PARENT_PROCESS_WATCH_INTERVAL = 10  # 10 s
 MAX_WORKERS = 64
-MARKDOWN_FILE_EXTENSIONS = ('.md', '.markdown')
 CONFIG_FILEs = ('.workspace.cfg') # TODO any markdown configuration for every workspace?
 
 
@@ -143,6 +142,12 @@ class MarkdownLanguageServer(MethodDispatcher):
         self._jsonrpc_stream_reader.close()
         self._jsonrpc_stream_writer.close()
 
+        for workspace_uri in self.workspaces:
+            workspace = self.workspaces.pop(workspace_uri, None)
+            if workspace:
+                workspace.finalize()
+                del workspace
+
     def _match_uri_to_workspace(self, uri):
         workspace_uri = _utils.match_uri_to_workspace(uri, self.workspaces)
         return self.workspaces.get(workspace_uri, self.workspace)
@@ -162,7 +167,7 @@ class MarkdownLanguageServer(MethodDispatcher):
             #},
             'completionProvider': {
                 'resolveProvider': False,  # We know everything ahead of time
-                'triggerCharacters': ['.']
+                'triggerCharacters': ['[[']
             },
             #'documentFormattingProvider': True,
             #'documentHighlightProvider': True,
@@ -172,7 +177,7 @@ class MarkdownLanguageServer(MethodDispatcher):
             'executeCommandProvider': {
                 'commands': flatten(self._hook('mdls_commands'))
             },
-            'hoverProvider': True,
+            'hoverProvider': False,
             'referencesProvider': True,
             'renameProvider': True,
             'foldingRangeProvider': False,
@@ -186,6 +191,7 @@ class MarkdownLanguageServer(MethodDispatcher):
                 },
                 'openClose': True,
             },
+            'workspaceSymbolProvider': True,
             'workspace': {
                 'workspaceFolders': {
                     'supported': True,
@@ -202,7 +208,10 @@ class MarkdownLanguageServer(MethodDispatcher):
         if rootUri is None:
             rootUri = uris.from_fs_path(rootPath) if rootPath is not None else ''
 
-        self.workspaces.pop(self.root_uri, None)
+        workspace = self.workspaces.pop(self.root_uri, None)
+        if workspace:
+            workspace.finalize()
+            del workspace
         self.root_uri = rootUri
         self.config = config.Config(rootUri, initializationOptions or {},
                                     processId, _kwargs.get('capabilities', {}))
@@ -246,7 +255,11 @@ class MarkdownLanguageServer(MethodDispatcher):
         return flatten(self._hook('mdls_definitions', doc_uri, position=position))
 
     def document_symbols(self, doc_uri):
+        log.info(f'-----{doc_uri}')
         return flatten(self._hook('mdls_document_symbols', doc_uri))
+
+    def workspace_symbols(self, query):
+        return flatten(self._hook('mdls_workspace_symbols', query=query))
 
     def execute_command(self, command, arguments):
         return self._hook('mdls_execute_command', command=command, arguments=arguments)
@@ -295,6 +308,7 @@ class MarkdownLanguageServer(MethodDispatcher):
     def m_text_document__did_open(self, textDocument=None, **_kwargs):
         workspace = self._match_uri_to_workspace(textDocument['uri'])
         workspace.put_document(textDocument['uri'], textDocument['text'], version=textDocument.get('version'))
+        log.info(f'open {textDocument}')
         self._hook('mdls_document_did_open', textDocument['uri'])
         #self.lint(textDocument['uri'], is_saved=True)
 
@@ -309,7 +323,10 @@ class MarkdownLanguageServer(MethodDispatcher):
         #self.lint(textDocument['uri'], is_saved=False)
 
     def m_text_document__did_save(self, textDocument=None, **_kwargs):
-        pass
+        doc_uri = textDocument['uri']
+        workspace = self._match_uri_to_workspace(doc_uri)
+        if doc_uri in workspace.documents:
+            workspace.documents[doc_uri].scan_links()
         #self.lint(textDocument['uri'], is_saved=True)
 
     def m_text_document__code_action(self, textDocument=None, range=None, context=None, **_kwargs):
@@ -354,6 +371,10 @@ class MarkdownLanguageServer(MethodDispatcher):
     def m_text_document__signature_help(self, textDocument=None, position=None, **_kwargs):
         return self.signature_help(textDocument['uri'], position)
 
+
+    def m_workspace__symbol(self, query):
+        return self.workspace_symbols(query)
+
     def m_workspace__did_change_configuration(self, settings=None):
         self.config.update((settings or {}).get('mdls', {}))
         for workspace_uri in self.workspaces:
@@ -371,7 +392,10 @@ class MarkdownLanguageServer(MethodDispatcher):
         for removed_info in removed:
             if 'uri' in removed_info:
                 removed_uri = removed_info['uri']
-                self.workspaces.pop(removed_uri, None)
+                removed_workspace = self.workspaces.pop(removed_uri, None)
+                if removed_workspace:
+                    removed_workspace.finalize()
+                    del removed_workspace
 
         for added_info in added:
             if 'uri' in added_info:
@@ -416,6 +440,8 @@ class MarkdownLanguageServer(MethodDispatcher):
         elif not changed_md_files:
             # Only externally changed markdown files and lint configs may result in changed diagnostics.
             return
+
+        #TODO register watched files to every workspace
 
         # for workspace_uri in self.workspaces:
         #     workspace = self.workspaces[workspace_uri]

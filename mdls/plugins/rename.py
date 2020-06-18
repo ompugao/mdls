@@ -2,34 +2,22 @@
 import logging
 import os
 
-from rope.base import libutils
-from rope.refactor.rename import Rename
-
-from pyls import hookimpl, uris
+from mdls import hookimpl, uris
 
 log = logging.getLogger(__name__)
 
-
 @hookimpl
-def pyls_settings():
-    # Default rope_rename to disabled
-    return {'plugins': {'rope_rename': {'enabled': False}}}
+def mdls_rename(config, workspace, document, position, new_name):
+    original_pagename = document.pagelink_at_position(position)
+    log.debug("Executing rename of %s to %s", original_pagename, new_name)
+    for doc_uri in workspace._docs_scanned:
+        if os.path.splitext(workspace._docs_scanned[doc_uri].filename)[0] == pagename:
+            #TODO rename file
+            pass
+        if pagename in workspace._docs_scanned[doc_uri].pagelinks:
+            #TODO
+            pass
 
-
-@hookimpl
-def pyls_rename(config, workspace, document, position, new_name):
-    rope_config = config.settings(document_path=document.path).get('rope', {})
-    rope_project = workspace._rope_project_builder(rope_config)
-
-    rename = Rename(
-        rope_project,
-        libutils.path_to_resource(rope_project, document.path),
-        document.offset_at_position(position)
-    )
-
-    log.debug("Executing rename of %s to %s", document.word_at_position(position), new_name)
-    changeset = rename.get_changes(new_name, in_hierarchy=True, docs=True)
-    log.debug("Finished rename: %s", changeset.changes)
     return {
         'documentChanges': [{
             'textDocument': {

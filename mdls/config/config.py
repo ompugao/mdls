@@ -29,16 +29,11 @@ class Config(object):
         self._plugin_settings = {}
 
         self._config_sources = {}
-        # try:
-        #     from .flake8_conf import Flake8Config
-        #     self._config_sources['flake8'] = Flake8Config(self._root_path)
-        # except ImportError:
-        #     pass
-        # try:
-        #     from .pycodestyle_conf import PyCodeStyleConfig
-        #     self._config_sources['pycodestyle'] = PyCodeStyleConfig(self._root_path)
-        # except ImportError:
-        #     pass
+        try:
+            from .mistune_conf import MistuneConfig
+            self._config_sources['mistune'] = MistuneConfig(self._root_path)
+        except ImportError:
+            pass
 
         self._pm = pluggy.PluginManager(MDLS)
         self._pm.trace.root.setwriter(log.debug)

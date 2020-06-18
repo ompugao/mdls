@@ -37,7 +37,8 @@ setup(
         'backports.functools_lru_cache; python_version<"3.2"',
         'python-jsonrpc-server>=0.3.2',
         'pluggy',
-        'ujson<=1.35; platform_system!="Windows"'
+        'ujson<=1.35; platform_system!="Windows"',
+        'watchdog>=0.10.2'
     ],
 
     # List additional groups of dependencies here (e.g. development
@@ -60,7 +61,14 @@ setup(
             'mdls = mdls.__main__:main',
         ],
         'mdls': [
-            'hogehoge = mdls.plugins.hogehoge'
+            'completion = mdls.plugins.completion',
+            'definition = mdls.plugins.definition',
+            'hover = mdls.plugins.hover',
+            'highlight = mdls.plugins.highlight',
+            'references = mdls.plugins.references',
+            'rename = mdls.plugins.rename',
+            'signature_help = mdls.plugins.signature',
+            'symbols = mdls.plugins.symbols'
         ]
     },
 )

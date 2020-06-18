@@ -55,6 +55,10 @@ def mdls_document_highlight(config, workspace, document, position):
 def mdls_document_symbols(config, workspace, document):
     pass
 
+@hookspec
+def mdls_workspace_symbols(config, workspace, query):
+    pass
+
 
 @hookspec(firstresult=True)
 def mdls_execute_command(config, workspace, command, arguments):
